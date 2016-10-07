@@ -58,27 +58,32 @@
             </div>
           </div>
 
-          <div class="form-group">
-            <label class="col-sm-4 control-label">Regex name: </label>
-            <div class="col-sm-7">
-              <select name="regex_name" class="form-control">
-                  {% for rec in form_data['regex_names'] %}
-                    <option value="{{ rec.id }}" {{ 'selected' if rec.id == selected_inputs['regex_name'] }}>{{ rec.name }}</option>
-                  {% endfor %}
-              </select>
+          {% if form_data['regex_names'] %}
+            <div class="form-group">
+              <label class="col-sm-4 control-label">Regex name: </label>
+              <div class="col-sm-7">
+                <select name="regex_name" class="form-control">
+                    {% for rec in form_data['regex_names'] %}
+                      <option value="{{ rec.id }}" {{ 'selected' if rec.id == selected_inputs['regex_name'] }}>{{ rec.name }}</option>
+                    {% endfor %}
+                </select>
+              </div>
             </div>
-          </div>
+          {% endif %}
 
-          <div class="form-group">
-            <label class="col-sm-4 control-label">Regex pattern: </label>
-            <div class="col-sm-7">
-              <select name="regex_pattern" class="form-control">
-                  {% for rec in form_data['regex_patterns'] %}
-                    <option value="{{ rec.id }}" name_id="{{ rec.name_id }}" {{ 'selected' if rec.id == selected_inputs['regex_pattern'] }}>{{ rec.pattern }}</option>
-                  {% endfor %}
-              </select>
+          {% if form_data['regex_patterns'] %}
+            <div class="form-group">
+              <label class="col-sm-4 control-label">Regex pattern: </label>
+              <div class="col-sm-7">
+                <select name="regex_pattern" class="form-control">
+                    {% for rec in form_data['regex_patterns'] %}
+                      <option value="{{ rec.id }}" name_id="{{ rec.name_id }}" {{ 'selected' if rec.id == selected_inputs['regex_pattern'] }}>{{ rec.pattern }}</option>
+                    {% endfor %}
+                </select>
+              </div>
             </div>
-          </div>
+          {% endif %}
+
         </form>
 
         <div class="form-group">

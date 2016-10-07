@@ -38,7 +38,7 @@ def index():
                     'regex_names': get_regex_names(),
                     'regex_patterns': get_regex_patterns(),
                     'processing_methods': get_processing_methods()},
-                selected_inputs={'algorithm': 4}
+                selected_inputs={}
             )
 
 

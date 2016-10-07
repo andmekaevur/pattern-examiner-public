@@ -119,19 +119,17 @@ $(document).ready(function() {
 
   });
 
-
-
   $('select[name=input_type]').change(function() {
-    if (this.value == 1) {
+    if (this.selectedOptions[0].text == 'Extractor') {
       $('select[name=regex_name]').closest('.form-group').css('visibility', 'visible');
       $('select[name=regex_pattern]').closest('.form-group').css('visibility', 'visible');
-    }
-    if (this.value == 2) {
+    } else {
       $('select[name=regex_name]').closest('.form-group').css('visibility', 'hidden');
       $('select[name=regex_pattern]').closest('.form-group').css('visibility', 'hidden');
     }
-  })
+  });
 
+  // $('select[name=input_type]').change();
 
   // Give the filtering and/or checkboxes a bit of a radio button feel, for comfort. 
   $("input[name=filteringType").click(function() {
