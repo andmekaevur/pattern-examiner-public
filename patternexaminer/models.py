@@ -48,17 +48,17 @@ class RegexPattern(PatternExaminerBase):
     name_id = Column(Integer, ForeignKey(RegexName.id))
 
 
-class CachedArrays(PatternExaminerBase):
-    table_name = 'cached_arrays'
-    cosine_similarities = Column(LargeBinary)
-    cosine_similarities_dtype = Column(String)
-    cosine_similarities_dim = Column(Integer)
-    sentence_indexes = Column(LargeBinary)
-    sentence_indexes_dtype = Column(String)
-    features = Column(LargeBinary)
-    features_dtype = Column(String)
-    features_rows = Column(Integer)
-    features_cols = Column(Integer)
+# class CachedArrays(PatternExaminerBase):
+#     table_name = 'cached_arrays'
+#     cosine_similarities = Column(LargeBinary)
+#     cosine_similarities_dtype = Column(String)
+#     cosine_similarities_dim = Column(Integer)
+#     sentence_indexes = Column(LargeBinary)
+#     sentence_indexes_dtype = Column(String)
+#     features = Column(LargeBinary)
+#     features_dtype = Column(String)
+#     features_rows = Column(Integer)
+#     features_cols = Column(Integer)
 
 
 class Experiment(PatternExaminerBase):
@@ -78,7 +78,7 @@ class Experiment(PatternExaminerBase):
     status = Column(String)
     lines = Column(Integer)
     clusters_count = Column(Integer)
-    cached_arrays_id = Column(Integer, ForeignKey(CachedArrays.id))
+    cached_arrays_id = Column(String)
 
     # Not sure if parent_id foreign key works without this, but id can't be 
     # read from the PatternExaminerBase class at the moment.

@@ -8,6 +8,8 @@ import logging
 
 from collections import defaultdict
 
+import h5py
+
 from joblib import Parallel, delayed
 
 import numpy as np
@@ -21,7 +23,7 @@ from sqlalchemy.sql import func
 from patternexaminer.database import db_session
 from patternexaminer.models import Experiment, ResultWork, ResultRaw, ResultPublic,\
         Algorithm, Traceback, InputType, RegexName, RegexPattern, WorkExtractedNumber,\
-        CachedArrays, RawExtractedNumber, PublicData
+        RawExtractedNumber, PublicData
 from patternexaminer.utils import get_model_attr_by_id, get_result_object, get_root_experiment_input_type
 
 # Tables unralated to us give warning, disable it to spare it logging.
@@ -31,6 +33,7 @@ warnings.filterwarnings("ignore", message="Did not recognize type")
 FORMAT = '%(asctime)-15s %(process)d %(levelname)s %(message)s'
 logging.basicConfig(filename='cluster_logging.log', format=FORMAT, level=0)
 logger = logging.getLogger(__name__)
+
 
 
 class DecisionTreeClustering:
@@ -179,11 +182,13 @@ class Clustering:
     def construct_decision_tree_features(self, sentences):
         print('constructing dec_tree features')
         common_patterns = ['([0-9][0-9]\.[0-9][0-9]\.[0-9]{4})', '[0-9][0-9]:[0-9][0-9]:?([0-9][0-9]:?)?', '([0-9][0-9]\.[0-9][0-9]\.[0-9]{4})\s[0-9][0-9]:[0-9][0-9]:?([0-9][0-9]:?)?', '\s*[-/A-ZÜÕÖÄa-züõöä%#,]+', 'Kood ja nimetus:', '[Aa]nalüüsides|seerumis|uriinis|plasmas|S,P-', '([Dd]gn:|[Dd]iagnoos:)', '\([0-9.,]+\s*\.\.\s*[0-9.,]+', '[0-9.,]+\s*[Xx]\s*[0-9.,]+', '[0-9.,]+\s*\([<>][0-9.,]+.*\)', '\s*[-/A-ZÜÕÖÄa-züõöä%#,]+' + '\s*\(.*\):\s*[0-9.,]+', '[mM][cC]?[gG]\s*(\*|x|X|kord[()a]*)\s*[0-9]+', '[0-9]\s*(\*|x|X|kord[()a]*)\s*päevas', '[A-ZÜÕÖÄ0-9 ]+:\s*[-+0-9.,]+', '(ANALÜÜSIDE\sTELLIMUS\snr:|ARHIIVI NR)', '([0-9][0-9]\.[0-9][0-9]\.[0-9]{4})\s[0-9][0-9]:[0-9][0-9]:?([0-9][0-9]:?)?\s\s*[-/A-ZÜÕÖÄa-züõöä%#,]+', '[0-9.,]+\s*\([^.]+\)', '(^|\s)[A-Z][a-z]+:\s[0-9]', '[0-9]+\s+[0-9]+\s+[0-9]+', '[0-9,.]+\s*[A-ZÜÕÖÄa-züõöäµ]+/[A-ZÜÕÖÄa-züõöäµ]+']
-
+        if self.input_type_name == 'Sports Data':
+            common_patterns = ['Eesti', 'aasta', 'punkt', 'minut', 'meetri', 'Poola', 'Tartu', 'Soome', 'koha', 'võitis']
         regexes_features = np.zeros((len(sentences), len(common_patterns)))
         for sentence_index, sentence in enumerate(sentences):
             for feature_index, pattern in enumerate(common_patterns):
-                if re.search(pattern, sentence):
+                # if re.search(pattern, sentence):
+                if re.search(pattern, sentence.lower()):
                     regexes_features[sentence_index][feature_index] = 1
 
         units_filename = 'units.tsv'
@@ -254,14 +259,10 @@ class Clustering:
         db_session.commit()
 
 
-    def cache_features(self, cached_arrays, sentences):
+    def cache_features(self, cache_id, sentences):
         print('cache features to the array db object')
         features = self.construct_decision_tree_features(sentences)
-        cached_arrays.features = features.tobytes()
-        cached_arrays.features_dtype = str(features.dtype)
-        cached_arrays.features_rows = features.shape[0]
-        cached_arrays.features_cols = features.shape[1]
-        return cached_arrays
+        CACHED_ARRAYS[cache_id]['features'] = features
 
 
     def construct_cached_arrays(self, sentences, sentence_indexes):
@@ -274,39 +275,29 @@ class Clustering:
 
         sentence_indexes = np.array(sentence_indexes)
 
-        cached_arrays = CachedArrays(
-                cosine_similarities=cosine_similarities.tobytes(),
-                cosine_similarities_dtype=str(cosine_similarities.dtype),
-                cosine_similarities_dim=cosine_similarities.shape[0],
-                sentence_indexes=sentence_indexes.tobytes(),
-                sentence_indexes_dtype=str(sentence_indexes.dtype))
+        cache_id = str(self.experiment.id)
+        CACHED_ARRAYS.create_group(cache_id)
+        CACHED_ARRAYS[cache_id]['cosine_similarities'] = cosine_similarities
+        CACHED_ARRAYS[cache_id]['sentence_indexes'] = sentence_indexes
 
         if self.algorithm_name == 'DecisionTree':
-            cached_arrays = self.cache_features(cached_arrays, sentences)
+            self.cache_features(cache_id, sentences)
 
-        db_session.add(cached_arrays)
-        db_session.commit()
+        self.experiment.cached_arrays_id = cache_id
 
-        return cached_arrays
+        return CACHED_ARRAYS[cache_id]
 
 
-    def unpack_cached_arrays(self, cached_arrays):
-        print('unpacking the cached arrays')
+    def h5_data_to_numpy(self, cached_arrays):
         arrays = defaultdict(lambda: None)
-        dim = cached_arrays.cosine_similarities_dim
-        arrays['cosine_similarities'] = np.fromstring(cached_arrays.cosine_similarities, 
-                dtype=cached_arrays.cosine_similarities_dtype).reshape((dim,dim))
-        arrays['sentence_indexes'] = np.fromstring(cached_arrays.sentence_indexes,
-                dtype=cached_arrays.sentence_indexes_dtype)
+        arrays['cosine_similarities'] = np.array(cached_arrays['cosine_similarities'])
+        arrays['sentence_indexes'] = np.array(cached_arrays['sentence_indexes'])
         
         if self.algorithm_name == 'DecisionTree':
-            if not cached_arrays.features:
+            if 'features' not in cached_arrays:
                 sentences, _ = self.get_indexed_sentences()
-                cached_arrays = self.cache_features(cached_arrays, sentences)
-
-            arrays['features'] = np.fromstring(cached_arrays.features, 
-                    dtype=cached_arrays.features_dtype)\
-                    .reshape((cached_arrays.features_rows,cached_arrays.features_cols))
+                self.cache_features(self.experiment.cached_arrays_id, sentences)
+            arrays['features'] = np.array(cached_arrays['features'])
         
         return arrays
 
@@ -326,15 +317,16 @@ class Clustering:
 
         if similar_experiment:
             print('found similar experiment, getting arrays from db')
-            cached_arrays = db_session.query(CachedArrays)\
-                    .filter(CachedArrays.id==similar_experiment.cached_arrays_id).one()
+            cache_id = similar_experiment.cached_arrays_id
+            cached_arrays = CACHED_ARRAYS[cache_id]
+            self.experiment.cached_arrays_id = cache_id
+
         else:
             print('no such experiment, making new arrays')
             sentences, sentence_indexes = self.get_indexed_sentences()
             cached_arrays = self.construct_cached_arrays(sentences, sentence_indexes)
 
-        arrays = self.unpack_cached_arrays(cached_arrays)
-        self.experiment.cached_arrays_id = cached_arrays.id
+        arrays = self.h5_data_to_numpy(cached_arrays)
 
         return arrays
 
@@ -384,9 +376,10 @@ class Clustering:
                 cached_arrays_id = parent.cached_arrays_id
                 self.experiment.cached_arrays_id = cached_arrays_id
 
-                cached_arrays = db_session.query(CachedArrays).filter(CachedArrays.id==cached_arrays_id).one()
+                # cached_arrays = db_session.query(CachedArrays).filter(CachedArrays.id==cached_arrays_id).one()
+                cached_arrays = CACHED_ARRAYS[cached_arrays_id]
                 
-                arrays = self.unpack_cached_arrays(cached_arrays)
+                arrays = self.h5_data_to_numpy(cached_arrays)
                 cosine_similarities = arrays['cosine_similarities']
                 sentence_indexes = arrays['sentence_indexes']
                 features = arrays['features']
@@ -408,7 +401,7 @@ class Clustering:
 
             if self.input_type_name == 'Raw Data' or self.input_type_name == 'Sports Data':
                 print(self.input_type_name)
-                self.experiment.lines = 600
+                self.experiment.lines = 602
                 db_session.commit()
 
                 arrays = self.similar_experiment_arrays(filter_args=[(Experiment.lines, self.experiment.lines)])
@@ -455,6 +448,7 @@ class Clustering:
             db_session.add(Traceback(experiment_id=self.experiment.id, message=str(e)))
             logger.exception(str(e))
             db_session.commit()
+            CACHED_ARRAYS.close()
             raise e
 
 
@@ -488,5 +482,8 @@ if __name__ == '__main__':
         parent_label=parent_label
     )
 
+    CACHED_ARRAYS = h5py.File('cached_arrays.hdf5')
+
     # if 'regex_name' in request.form:
     clustering.run()
+    CACHED_ARRAYS.close()
