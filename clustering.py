@@ -318,7 +318,7 @@ class Clustering:
         if similar_experiment:
             print('found similar experiment, getting arrays from db')
             cache_id = similar_experiment.cached_arrays_id
-            cached_arrays = CACHED_ARRAYS[cache_id]
+            cached_arrays = CACHED_ARRAYS[str(cache_id)]
             self.experiment.cached_arrays_id = cache_id
 
         else:
@@ -401,7 +401,7 @@ class Clustering:
 
             if self.input_type_name == 'Raw Data' or self.input_type_name == 'Sports Data':
                 print(self.input_type_name)
-                self.experiment.lines = 602
+                self.experiment.lines = 2002
                 db_session.commit()
 
                 arrays = self.similar_experiment_arrays(filter_args=[(Experiment.lines, self.experiment.lines)])
